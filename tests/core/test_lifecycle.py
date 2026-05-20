@@ -74,6 +74,9 @@ def test_go_live_decision_is_frozen() -> None:
     )
     # frozen=True raises FrozenInstanceError (AttributeError subclass) on mutation
     with pytest.raises(AttributeError):
+        # mypy correctly flags assignment to a frozen dataclass field; the
+        # mutation is intentional here to verify that FrozenInstanceError is
+        # raised at runtime.
         decision.approved = False  # type: ignore[misc]
 
 
