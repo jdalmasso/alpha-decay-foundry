@@ -8,17 +8,12 @@ forecast-to-portfolio pipeline described in Active Portfolio Management
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from .data import DataProvider
+from .lifecycle import StrategyLifecycle
 from .types import TargetWeights, Timestamp
 from .universe import Universe
-
-if TYPE_CHECKING:
-    # Placeholder until core/lifecycle.py is implemented in issue #9.
-    # Replace with: from alpha_decay_foundry.core.lifecycle import StrategyLifecycle
-    class StrategyLifecycle:
-        """Stub for type-checking only; full class defined in issue #9."""
 
 
 @runtime_checkable
