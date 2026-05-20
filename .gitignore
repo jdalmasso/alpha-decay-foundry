@@ -12,4 +12,5 @@ build/
 venv/
 .env
 .DS_Store
+.claude/
 tests/.cache/raw/
