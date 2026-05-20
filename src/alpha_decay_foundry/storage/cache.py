@@ -16,6 +16,7 @@ Cache layout (see PRD §5.1)::
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import date
 from pathlib import Path
@@ -31,6 +32,13 @@ from alpha_decay_foundry.core.exceptions import CacheError
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CACHE_DIR = Path.home() / ".alpha_decay_foundry" / "cache"
+
+# DuckDB keywords that can write to disk or mutate schema.  query() rejects
+# any SQL whose first non-whitespace token matches one of these.
+_WRITE_SQL_PATTERN = re.compile(
+    r"^\s*(COPY|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|ATTACH|DETACH)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class CacheLayer:
@@ -203,23 +211,39 @@ class CacheLayer:
         return row is not None
 
     def query(self, sql: str) -> pd.DataFrame:
-        """Execute an arbitrary DuckDB SQL query and return results.
+        """Execute a DuckDB SQL query against cached metadata and return results.
 
-        The query runs against the metadata DuckDB connection, which can
-        also access Parquet files via DuckDB's ``read_parquet()`` table
-        function.
+        Write statements (``COPY``, ``INSERT``, ``UPDATE``, ``DELETE``,
+        ``CREATE``, ``DROP``, ``ALTER``, ``TRUNCATE``, ``ATTACH``,
+        ``DETACH``) are blocked before reaching DuckDB.  This prevents
+        accidental or injected SQL from mutating the metadata database or
+        writing files to the local filesystem.
+
+        **Security note**: ``sql`` must never be derived from external
+        sources (config files, CLI flags, downloaded content).  The write
+        guard blocks leading write keywords but is not a substitute for
+        treating externally-derived strings as untrusted input.
 
         Args:
-            sql: DuckDB-dialect SQL statement.
+            sql: DuckDB-dialect SQL statement.  Must be a read-only query
+                (SELECT, SHOW, DESCRIBE, EXPLAIN, or equivalent).
 
         Returns:
             DataFrame containing all result rows.
 
         Raises:
-            CacheError: If DuckDB raises an error executing the query.
+            CacheError: If ``sql`` contains a write keyword, or if DuckDB
+                raises an error executing the query.
         """
+        if _WRITE_SQL_PATTERN.match(sql):
+            raise CacheError(
+                "query() only accepts read-only SQL. "
+                "Use store() for writes to the cache."
+            )
         try:
             result: pd.DataFrame = self._conn.execute(sql).df()
+        except CacheError:
+            raise
         except Exception as exc:
             raise CacheError(f"Query failed: {exc}") from exc
         return result
@@ -228,7 +252,33 @@ class CacheLayer:
     # Internals
     # ------------------------------------------------------------------
 
+    def _validate_path_components(
+        self, source: str, dataset: str, version: str
+    ) -> None:
+        """Raise CacheError if any path component escapes the cache root.
+
+        Resolves the joined path and asserts it starts with
+        ``cache_dir.resolve()``.  Rejects components containing ``..``
+        or absolute path separators that would route writes or reads
+        outside the cache directory.
+
+        Args:
+            source: Data source name to validate.
+            dataset: Dataset name to validate.
+            version: Version tag to validate.
+
+        Raises:
+            CacheError: If the resolved path escapes ``cache_dir``.
+        """
+        resolved = (self.cache_dir / source / dataset / version).resolve()
+        if not resolved.is_relative_to(self.cache_dir.resolve()):
+            raise CacheError(
+                f"Unsafe path component — resolved path escapes cache root: "
+                f"{source!r}/{dataset!r}/{version!r}"
+            )
+
     def _snapshot_path(self, source: str, dataset: str, version: str) -> Path:
+        self._validate_path_components(source, dataset, version)
         return self.cache_dir / source / dataset / f"snapshot_{version}.parquet"
 
     def _resolve_path(
