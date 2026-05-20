@@ -226,16 +226,39 @@ def test_intentional_lookahead_caught_by_framework(
     mock_data_provider: InMemoryDataProvider,
     sample_universe: StaticUniverse,
 ) -> None:
-    """PRD §11.2: a strategy that peeks at future data is stopped cold."""
+    """PRD §11.2: a cheating strategy that peeks through its data param is stopped.
+
+    The critical property being tested is not that AsOfDataProvider.get_panel
+    raises (covered above) but that the interception happens transparently when
+    a strategy calls through the 'data' parameter it receives at runtime.
+    No engine is required to demonstrate this: the strategy just calls through
+    the wrapped provider and LookAheadError propagates up through the call stack.
+    """
     as_of = pd.Timestamp("2020-06-01", tz="UTC")
     start = pd.Timestamp("2020-01-02", tz="UTC")
     wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
 
-    # Simulate a cheating strategy that sneaks a future end date
-    future_end = pd.Timestamp("2020-12-31", tz="UTC")
+    class CheatingStrategy:
+        """Strategy with an intentional look-ahead bug (180 days past end)."""
 
+        def target_weights(
+            self,
+            data: AsOfDataProvider,
+            universe: StaticUniverse,
+            start: pd.Timestamp,
+            end: pd.Timestamp,
+        ) -> None:
+            # Bug: requests data 180 days past the simulation date
+            data.get_panel(
+                ["close"],
+                start,
+                end + pd.Timedelta(days=180),
+                universe,
+            )
+
+    strategy = CheatingStrategy()
     with pytest.raises(LookAheadError):
-        wrapped.get_panel(["close"], start, future_end)
+        strategy.target_weights(wrapped, sample_universe, start, as_of)
 
 
 # ---------------------------------------------------------------------------
