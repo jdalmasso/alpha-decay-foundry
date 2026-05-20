@@ -5,9 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from alpha_decay_foundry.core.data import DataProvider, InMemoryDataProvider
+from alpha_decay_foundry.core.data import DataProvider
 from alpha_decay_foundry.core.types import AssetId
 from alpha_decay_foundry.core.universe import StaticUniverse
+from tests.utils.data import InMemoryDataProvider
 
 # ---------------------------------------------------------------------------
 # Protocol conformance

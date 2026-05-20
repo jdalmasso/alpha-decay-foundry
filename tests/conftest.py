@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from alpha_decay_foundry.core.data import InMemoryDataProvider
 from alpha_decay_foundry.core.types import AssetId, DateRange
+from tests.utils.data import InMemoryDataProvider
 
 # ---------------------------------------------------------------------------
 # Shared constants
