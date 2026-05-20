@@ -5,7 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from alpha_decay_foundry.core.data import DataProvider
+from alpha_decay_foundry.core.data import AsOfDataProvider, DataProvider
+from alpha_decay_foundry.core.exceptions import LookAheadError
 from alpha_decay_foundry.core.types import AssetId
 from alpha_decay_foundry.core.universe import StaticUniverse
 from tests.utils.data import InMemoryDataProvider
@@ -166,4 +167,160 @@ def test_single_day_range(
         df = mock_data_provider.get_returns(t, t, universe)
     else:
         df = mock_data_provider.get_factor_returns(["mkt_rf"], t, t)
+    assert isinstance(df, pd.DataFrame)
+
+
+# ---------------------------------------------------------------------------
+# AsOfDataProvider — protocol conformance and basic properties
+# ---------------------------------------------------------------------------
+
+
+def test_as_of_provider_is_data_provider(
+    mock_data_provider: InMemoryDataProvider,
+) -> None:
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+    assert isinstance(wrapped, DataProvider)
+
+
+def test_as_of_provider_name(mock_data_provider: InMemoryDataProvider) -> None:
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+    assert wrapped.name == "mock@2020-06-01"
+
+
+def test_as_of_property(mock_data_provider: InMemoryDataProvider) -> None:
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+    assert wrapped.as_of == as_of
+
+
+# ---------------------------------------------------------------------------
+# AsOfDataProvider — look-ahead enforcement (PRD §11.2, mandatory tests)
+# ---------------------------------------------------------------------------
+
+
+def test_as_of_blocks_future_access(
+    mock_data_provider: InMemoryDataProvider,
+    sample_universe: StaticUniverse,
+) -> None:
+    """PRD §11.2: valid request succeeds; future request raises LookAheadError."""
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    start = pd.Timestamp("2020-01-02", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+
+    # Request up to as_of must succeed and return data
+    df = wrapped.get_panel(["close"], start, as_of)
+    assert not df.empty
+
+    # Request one day beyond as_of must be blocked
+    with pytest.raises(LookAheadError, match="look-ahead bias"):
+        wrapped.get_panel(
+            ["close"],
+            start,
+            pd.Timestamp("2020-12-31", tz="UTC"),
+        )
+
+
+def test_intentional_lookahead_caught_by_framework(
+    mock_data_provider: InMemoryDataProvider,
+    sample_universe: StaticUniverse,
+) -> None:
+    """PRD §11.2: a cheating strategy that peeks through its data param is stopped.
+
+    The critical property being tested is not that AsOfDataProvider.get_panel
+    raises (covered above) but that the interception happens transparently when
+    a strategy calls through the 'data' parameter it receives at runtime.
+    No engine is required to demonstrate this: the strategy just calls through
+    the wrapped provider and LookAheadError propagates up through the call stack.
+    """
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    start = pd.Timestamp("2020-01-02", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+
+    class CheatingStrategy:
+        """Strategy with an intentional look-ahead bug (180 days past end)."""
+
+        def target_weights(
+            self,
+            data: AsOfDataProvider,
+            universe: StaticUniverse,
+            start: pd.Timestamp,
+            end: pd.Timestamp,
+        ) -> None:
+            # Bug: requests data 180 days past the simulation date
+            data.get_panel(
+                ["close"],
+                start,
+                end + pd.Timedelta(days=180),
+                universe,
+            )
+
+    strategy = CheatingStrategy()
+    with pytest.raises(LookAheadError):
+        strategy.target_weights(wrapped, sample_universe, start, as_of)
+
+
+# ---------------------------------------------------------------------------
+# AsOfDataProvider — all three methods blocked and delegated
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["get_panel", "get_returns", "get_factor_returns"])
+def test_as_of_blocks_all_methods(
+    mock_data_provider: InMemoryDataProvider,
+    sample_universe: StaticUniverse,
+    method: str,
+) -> None:
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    start = pd.Timestamp("2020-01-02", tz="UTC")
+    future = pd.Timestamp("2020-12-31", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+
+    with pytest.raises(LookAheadError):
+        if method == "get_panel":
+            wrapped.get_panel(["close"], start, future)
+        elif method == "get_returns":
+            wrapped.get_returns(start, future, sample_universe)
+        else:
+            wrapped.get_factor_returns(["mkt_rf"], start, future)
+
+
+@pytest.mark.parametrize("method", ["get_panel", "get_returns", "get_factor_returns"])
+def test_as_of_delegates_valid_requests(
+    mock_data_provider: InMemoryDataProvider,
+    sample_universe: StaticUniverse,
+    method: str,
+) -> None:
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    start = pd.Timestamp("2020-01-02", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+
+    if method == "get_panel":
+        df = wrapped.get_panel(["close"], start, as_of)
+    elif method == "get_returns":
+        df = wrapped.get_returns(start, as_of, sample_universe)
+    else:
+        df = wrapped.get_factor_returns(["mkt_rf"], start, as_of)
+    assert isinstance(df, pd.DataFrame)
+
+
+def test_as_of_error_message_contains_context(
+    mock_data_provider: InMemoryDataProvider,
+) -> None:
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    future = pd.Timestamp("2020-12-31", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+
+    with pytest.raises(LookAheadError, match="2020-12-31"):
+        wrapped.get_panel(["close"], as_of, future)
+
+
+def test_as_of_exact_boundary_allowed(
+    mock_data_provider: InMemoryDataProvider,
+) -> None:
+    # end == as_of is not future data; must succeed
+    as_of = pd.Timestamp("2020-06-01", tz="UTC")
+    wrapped = AsOfDataProvider(mock_data_provider, as_of=as_of)
+    df = wrapped.get_panel(["close"], as_of, as_of)
     assert isinstance(df, pd.DataFrame)

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from alpha_decay_foundry.core.types import AssetId, DateRange
+from alpha_decay_foundry.core.universe import StaticUniverse
 from tests.utils.data import InMemoryDataProvider
 
 # ---------------------------------------------------------------------------
@@ -71,4 +72,13 @@ def mock_data_provider() -> InMemoryDataProvider:
         panel=panel_df,
         returns=returns_df,
         factor_returns=factor_df,
+    )
+
+
+@pytest.fixture
+def sample_universe() -> StaticUniverse:
+    """Small three-asset StaticUniverse for unit tests."""
+    return StaticUniverse(
+        name="sample",
+        members={AssetId("AAPL"), AssetId("MSFT"), AssetId("GOOG")},
     )
