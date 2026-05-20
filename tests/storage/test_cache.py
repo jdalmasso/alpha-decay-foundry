@@ -233,3 +233,60 @@ def test_query_copy_statement_raises_cache_error(cache: CacheLayer) -> None:
     """COPY ... TO must be blocked by the write-keyword guard."""
     with pytest.raises(CacheError, match="read-only SQL"):
         cache.query("COPY snapshots TO '/tmp/exfil.csv'")
+
+
+# ---------------------------------------------------------------------------
+# Hive-style partitioned store / load
+# ---------------------------------------------------------------------------
+
+
+def test_store_partitioned_creates_directory(cache: CacheLayer) -> None:
+    rng = np.random.default_rng(1)
+    df = pd.DataFrame(
+        {
+            "year": ["2020", "2020", "2021"],
+            "month": ["01", "02", "01"],
+            "value": rng.normal(0, 1, 3),
+        }
+    )
+    cache.store_partitioned("osap", "chars", df, partition_cols=["year", "month"])
+    assert (cache.cache_dir / "osap" / "chars").is_dir()
+
+
+def test_store_partitioned_records_metadata(cache: CacheLayer) -> None:
+    rng = np.random.default_rng(2)
+    df = pd.DataFrame({"year": ["2020"], "value": rng.normal(0, 1, 1)})
+    cache.store_partitioned("osap", "chars", df, partition_cols=["year"], version="v1")
+    assert cache.exists("osap", "chars", version="v1")
+
+
+def test_load_partitioned_returns_dataframe(cache: CacheLayer) -> None:
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame(
+        {
+            "year": ["2020", "2020"],
+            "month": ["01", "02"],
+            "value": rng.normal(0, 1, 2),
+        }
+    )
+    cache.store_partitioned("osap", "chars", df, partition_cols=["year"])
+    loaded = cache.load_partitioned("osap", "chars")
+    assert isinstance(loaded, pd.DataFrame)
+    assert len(loaded) == 2
+
+
+def test_load_partitioned_raises_on_miss(cache: CacheLayer) -> None:
+    with pytest.raises(CacheError):
+        cache.load_partitioned("osap", "chars", version="never-stored")
+
+
+def test_store_partitioned_path_traversal_raises(
+    cache: CacheLayer,
+) -> None:
+    """store_partitioned() must reject traversal components."""
+    rng = np.random.default_rng(4)
+    df = pd.DataFrame({"year": ["2020"], "value": rng.normal(0, 1, 1)})
+    with pytest.raises(CacheError, match="Unsafe path component"):
+        cache.store_partitioned(
+            "../../evil", "chars", df, partition_cols=["year"], version="v1"
+        )
