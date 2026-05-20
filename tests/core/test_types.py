@@ -53,7 +53,7 @@ def test_daterange_is_frozen() -> None:
         end=pd.Timestamp("2020-12-31", tz="UTC"),
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
-        dr.start = pd.Timestamp("2021-01-01", tz="UTC")  # type: ignore[misc]
+        dr.start = pd.Timestamp("2021-01-01", tz="UTC")  # type: ignore[misc]  # intentional: assignment to frozen field to confirm runtime enforcement fires
 
 
 # ---------------------------------------------------------------------------
@@ -149,3 +149,30 @@ def test_timestamp_alias_is_pd_timestamp() -> None:
     t: Timestamp = pd.Timestamp("2020-01-01", tz="UTC")
     assert isinstance(t, pd.Timestamp)
     assert t.tzinfo is not None
+
+
+# ---------------------------------------------------------------------------
+# Timezone-naive edge cases (documenting current behavior, not enforcing UTC)
+# ---------------------------------------------------------------------------
+
+
+def test_daterange_accepts_naive_timestamps_silently() -> None:
+    # DateRange has no UTC validation; two naive timestamps are accepted.
+    # Callers are responsible for passing UTC-aware values (module docstring).
+    naive_start = pd.Timestamp("2020-01-01")
+    naive_end = pd.Timestamp("2020-12-31")
+    dr = DateRange(start=naive_start, end=naive_end)
+    assert dr.start == naive_start
+    assert dr.end == naive_end
+
+
+def test_contains_naive_vs_aware_raises_type_error() -> None:
+    # Mixing naive and aware timestamps in contains() propagates a pandas
+    # TypeError. This is the expected failure mode when callers violate the
+    # UTC-aware contract; no FoundryError is raised at this layer.
+    aware_start = pd.Timestamp("2020-01-01", tz="UTC")
+    aware_end = pd.Timestamp("2020-12-31", tz="UTC")
+    dr = DateRange(start=aware_start, end=aware_end)
+    naive_t = pd.Timestamp("2020-06-15")
+    with pytest.raises(TypeError, match="tz-naive"):
+        dr.contains(naive_t)
