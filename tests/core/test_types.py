@@ -53,7 +53,8 @@ def test_daterange_is_frozen() -> None:
         end=pd.Timestamp("2020-12-31", tz="UTC"),
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
-        dr.start = pd.Timestamp("2021-01-01", tz="UTC")  # type: ignore[misc]  # intentional: assignment to frozen field to confirm runtime enforcement fires
+        # intentional: assigning to a frozen field to confirm the runtime error fires
+        dr.start = pd.Timestamp("2021-01-01", tz="UTC")  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
