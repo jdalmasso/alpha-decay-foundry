@@ -47,6 +47,7 @@ files = ["src/alpha_decay_foundry"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-v --cov=alpha_decay_foundry --cov-report=term-missing"
 
 [tool.ruff]
