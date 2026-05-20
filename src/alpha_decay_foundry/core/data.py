@@ -11,6 +11,7 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
+from .exceptions import LookAheadError
 from .types import Timestamp
 from .universe import Universe
 
@@ -96,3 +97,107 @@ class DataProvider(Protocol):
             names as columns. Values are decimal returns (not percent).
         """
         ...
+
+
+class AsOfDataProvider:
+    """Wraps any DataProvider with strict point-in-time semantics.
+
+    Any request whose end timestamp exceeds as_of raises LookAheadError.
+    This is the framework's primary defence against look-ahead bias: the
+    backtesting engine constructs a new AsOfDataProvider at each rebalance
+    date, and strategies literally cannot read data from the future.
+
+    Args:
+        inner: The underlying DataProvider to delegate valid requests to.
+        as_of: The current simulation date. Requests ending after this
+            timestamp are rejected.
+    """
+
+    def __init__(self, inner: DataProvider, as_of: Timestamp) -> None:
+        self._inner = inner
+        self._as_of = as_of
+        self.name = f"{inner.name}@{as_of.date()}"
+
+    @property
+    def as_of(self) -> Timestamp:
+        """Return the current simulation cutoff date."""
+        return self._as_of
+
+    def _check(self, end: Timestamp) -> None:
+        if end > self._as_of:
+            raise LookAheadError(
+                f"Strategy requested data through {end} but as_of is "
+                f"{self._as_of}. This indicates look-ahead bias."
+            )
+
+    def get_panel(
+        self,
+        fields: list[str],
+        start: Timestamp,
+        end: Timestamp,
+        universe: Universe | None = None,
+    ) -> pd.DataFrame:
+        """Delegate to inner provider after enforcing the as-of cutoff.
+
+        Args:
+            fields: Column names to retrieve.
+            start: Range start (UTC-aware, inclusive).
+            end: Range end (UTC-aware, inclusive).
+            universe: Optional universe filter; passed through to inner.
+
+        Returns:
+            Panel DataFrame from the inner provider.
+
+        Raises:
+            LookAheadError: If end > as_of.
+        """
+        self._check(end)
+        return self._inner.get_panel(fields, start, end, universe)
+
+    def get_returns(
+        self,
+        start: Timestamp,
+        end: Timestamp,
+        universe: Universe,
+        frequency: str = "daily",
+    ) -> pd.DataFrame:
+        """Delegate to inner provider after enforcing the as-of cutoff.
+
+        Args:
+            start: Range start (UTC-aware, inclusive).
+            end: Range end (UTC-aware, inclusive).
+            universe: Assets to include.
+            frequency: Aggregation frequency.
+
+        Returns:
+            Returns DataFrame from the inner provider.
+
+        Raises:
+            LookAheadError: If end > as_of.
+        """
+        self._check(end)
+        return self._inner.get_returns(start, end, universe, frequency)
+
+    def get_factor_returns(
+        self,
+        factors: list[str],
+        start: Timestamp,
+        end: Timestamp,
+        frequency: str = "daily",
+    ) -> pd.DataFrame:
+        """Delegate to inner provider after enforcing the as-of cutoff.
+
+        Args:
+            factors: Factor names to retrieve.
+            start: Range start (UTC-aware, inclusive).
+            end: Range end (UTC-aware, inclusive).
+            frequency: Aggregation frequency.
+
+        Returns:
+            Factor returns DataFrame from the inner provider.
+
+        Raises:
+            LookAheadError: If end > as_of.
+        """
+        self._check(end)
+        return self._inner.get_factor_returns(factors, start, end, frequency)
