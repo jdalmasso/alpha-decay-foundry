@@ -225,6 +225,118 @@ class CacheLayer:
         return result
 
     # ------------------------------------------------------------------
+    # Hive-style partitioned store / load
+    # ------------------------------------------------------------------
+
+    def store_partitioned(
+        self,
+        source: str,
+        dataset: str,
+        data: pd.DataFrame,
+        partition_cols: list[str],
+        version: str | None = None,
+    ) -> None:
+        """Write Hive-style partitioned Parquet files for time-series data.
+
+        Partitions are written as ``<col>=<value>/data.parquet`` sub-paths
+        under ``cache_dir/<source>/<dataset>/``.  A single metadata row
+        records the partition root (not each individual file).
+
+        Args:
+            source: Data source name.
+            dataset: Dataset name.
+            data: DataFrame containing the partition columns.
+            partition_cols: Columns to partition by (e.g.
+                ``["year", "month"]``).
+            version: Snapshot version tag.  Defaults to today's ISO date.
+
+        Raises:
+            CacheError: If the write or metadata update fails.
+        """
+        import pyarrow.parquet as _pq
+
+        version = version or str(date.today())
+        root = self.cache_dir / source / dataset
+        root.mkdir(parents=True, exist_ok=True)
+
+        try:
+            table = pa.Table.from_pandas(data)
+            # pyarrow has no py.typed marker; pq.write_to_dataset is untyped
+            _pq.write_to_dataset(  # type: ignore[no-untyped-call]
+                table,
+                root_path=str(root),
+                partition_cols=partition_cols,
+                compression="snappy",
+                existing_data_behavior="overwrite_or_ignore",
+            )
+        except Exception as exc:
+            raise CacheError(
+                f"Failed to store partitioned {source}/{dataset}@{version}: {exc}"
+            ) from exc
+
+        try:
+            self._conn.execute(
+                """
+                INSERT OR REPLACE INTO snapshots (source, dataset, version, path)
+                VALUES (?, ?, ?, ?)
+                """,
+                [source, dataset, version, str(root)],
+            )
+        except Exception as exc:
+            raise CacheError(
+                f"Failed to record metadata for {source}/{dataset}@{version}: {exc}"
+            ) from exc
+
+        logger.info(
+            "Cached partitioned %s/%s@%s → %s", source, dataset, version, root
+        )
+
+    def load_partitioned(
+        self,
+        source: str,
+        dataset: str,
+        version: str | None = None,
+        filters: list[tuple[str, str, Any]] | None = None,
+    ) -> pd.DataFrame:
+        """Load a Hive-style partitioned dataset.
+
+        Args:
+            source: Data source name.
+            dataset: Dataset name.
+            version: Snapshot version tag.  If ``None``, loads the most
+                recently stored version.
+            filters: Optional PyArrow-style row filters, e.g.
+                ``[("year", "=", "2024"), ("month", "=", "01")]``.
+
+        Returns:
+            DataFrame with all partitions merged.
+
+        Raises:
+            CacheError: If no matching snapshot is found or read fails.
+        """
+        import pyarrow.parquet as _pq
+
+        root_str = self._resolve_path(source, dataset, version)
+        root = Path(root_str)
+        if not root.is_dir():
+            raise CacheError(
+                f"Partitioned dataset root not found for {source}/{dataset}: {root}"
+            )
+
+        try:
+            # pyarrow has no py.typed marker; ParquetDataset and read_pandas are untyped
+            dataset_obj = _pq.ParquetDataset(  # type: ignore[no-untyped-call]
+                str(root),
+                filters=filters,
+            )
+            df: pd.DataFrame = dataset_obj.read_pandas().to_pandas()  # type: ignore[no-untyped-call]
+        except Exception as exc:
+            raise CacheError(
+                f"Failed to read partitioned {source}/{dataset}: {exc}"
+            ) from exc
+        return df
+
+    # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
 

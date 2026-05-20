@@ -1,4 +1,4 @@
-"""Tests for src/alpha_decay_foundry/storage/cache.py (flat store/load/exists/query)."""
+"""Tests for src/alpha_decay_foundry/storage/cache.py (partitioned store/load)."""
 
 from __future__ import annotations
 
@@ -217,3 +217,54 @@ def test_close_releases_connection(tmp_path: Path) -> None:
     """CacheLayer.close() should not raise."""
     cache = CacheLayer(cache_dir=tmp_path)
     cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Hive-style partitioned store / load
+# ---------------------------------------------------------------------------
+
+
+def test_store_partitioned_creates_directory(
+    cache: CacheLayer,
+) -> None:
+    rng = np.random.default_rng(1)
+    df = pd.DataFrame(
+        {
+            "year": ["2020", "2020", "2021"],
+            "month": ["01", "02", "01"],
+            "value": rng.normal(0, 1, 3),
+        }
+    )
+    cache.store_partitioned("osap", "chars", df, partition_cols=["year", "month"])
+    assert (cache.cache_dir / "osap" / "chars").is_dir()
+
+
+def test_store_partitioned_records_metadata(
+    cache: CacheLayer,
+) -> None:
+    rng = np.random.default_rng(2)
+    df = pd.DataFrame({"year": ["2020"], "value": rng.normal(0, 1, 1)})
+    cache.store_partitioned("osap", "chars", df, partition_cols=["year"], version="v1")
+    assert cache.exists("osap", "chars", version="v1")
+
+
+def test_load_partitioned_returns_dataframe(
+    cache: CacheLayer,
+) -> None:
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame(
+        {
+            "year": ["2020", "2020"],
+            "month": ["01", "02"],
+            "value": rng.normal(0, 1, 2),
+        }
+    )
+    cache.store_partitioned("osap", "chars", df, partition_cols=["year"])
+    loaded = cache.load_partitioned("osap", "chars")
+    assert isinstance(loaded, pd.DataFrame)
+    assert len(loaded) == 2
+
+
+def test_load_partitioned_raises_on_miss(cache: CacheLayer) -> None:
+    with pytest.raises(CacheError):
+        cache.load_partitioned("osap", "chars", version="never-stored")
