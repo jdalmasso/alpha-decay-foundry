@@ -57,9 +57,7 @@ class DollarNeutralStrategy:
         # Simple alternating +/-; assumes even number of members
         half = len(members) // 2
         weights = [1.0 / half] * half + [-1.0 / half] * half
-        return pd.DataFrame(
-            [weights] * len(dates), index=dates, columns=members
-        )
+        return pd.DataFrame([weights] * len(dates), index=dates, columns=members)
 
 
 # ---------------------------------------------------------------------------

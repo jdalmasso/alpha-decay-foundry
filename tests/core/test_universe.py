@@ -37,9 +37,7 @@ def test_static_universe_name(universe: StaticUniverse) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_members_at_returns_full_set(
-    universe: StaticUniverse, members: set[AssetId]
-) -> None:
+def test_members_at_returns_full_set(universe: StaticUniverse, members: set[AssetId]) -> None:
     t = pd.Timestamp("2020-06-15", tz="UTC")
     assert universe.members_at(t) == members
 
@@ -74,9 +72,7 @@ def test_members_at_empty_universe() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_members_between_shape(
-    universe: StaticUniverse, members: set[AssetId]
-) -> None:
+def test_members_between_shape(universe: StaticUniverse, members: set[AssetId]) -> None:
     start = pd.Timestamp("2023-01-02", tz="UTC")
     end = pd.Timestamp("2023-01-06", tz="UTC")  # 5 calendar days
     df = universe.members_between(start, end)

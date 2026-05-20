@@ -30,7 +30,7 @@ For each issue you pick up:
 4. Create the correctly-named branch: `v0.1/<issue-number>-<short-description>`
 5. Implement against the acceptance criteria
 6. Write tests as you implement (do not save tests for last)
-7. Run `uv run ruff check`, `uv run mypy src/alpha_decay_foundry --strict`, and `uv run pytest`
+7. Run `uv run ruff check src tests`, `uv run ruff format --check src tests`, `uv run mypy src/alpha_decay_foundry --strict`, and `uv run pytest`
 8. Fix any failures (this is not optional)
 9. Commit with a message in the format: `<area>: <change> (#<issue-number>)`
 10. Push the branch
