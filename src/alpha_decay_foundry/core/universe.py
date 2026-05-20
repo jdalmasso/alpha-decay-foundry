@@ -6,11 +6,19 @@ handling IPOs, delistings, and index-membership changes.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import pandas as pd
 
 from .types import AssetId, Timestamp
+
+if TYPE_CHECKING:
+    # Placeholder until data_providers/osap.py is implemented in issue #14.
+    # Replace with: from alpha_decay_foundry.data_providers.osap import OSAPDataProvider
+    class OSAPDataProvider:
+        """Stub for type-checking only; full class defined in issue #14."""
+
+        name: str
 
 
 @runtime_checkable
@@ -110,7 +118,7 @@ class OSAPUniverse:
     Tracked in issue #14.
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, osap_provider: OSAPDataProvider) -> None:
         self.name = name
         raise NotImplementedError(
             "OSAPUniverse requires OSAPDataProvider (issue #14). "
