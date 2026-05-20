@@ -140,4 +140,5 @@ def test_osap_universe_raises_not_implemented() -> None:
     from alpha_decay_foundry.core.universe import OSAPUniverse
 
     with pytest.raises(NotImplementedError, match="OSAPUniverse requires"):
-        OSAPUniverse("test", osap_provider=None)  # type: ignore[arg-type]  # intentional: passing None to trigger NotImplementedError before provider is used
+        # intentional: None satisfies the signature so NotImplementedError fires
+        OSAPUniverse("test", osap_provider=None)  # type: ignore[arg-type]
