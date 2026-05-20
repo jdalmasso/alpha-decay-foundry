@@ -217,3 +217,47 @@ def test_close_releases_connection(tmp_path: Path) -> None:
     """CacheLayer.close() should not raise."""
     cache = CacheLayer(cache_dir=tmp_path)
     cache.close()
+
+
+# ---------------------------------------------------------------------------
+# Security: path traversal rejection
+# ---------------------------------------------------------------------------
+
+
+def test_store_path_traversal_in_source_raises(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
+    """source='../../evil' must not escape the cache root."""
+    with pytest.raises(CacheError, match="Unsafe path component"):
+        cache.store("../../evil", "dataset", sample_df, version="v1")
+
+
+def test_store_path_traversal_in_version_raises(
+    cache: CacheLayer, sample_df: pd.DataFrame
+) -> None:
+    """version='../../../etc/passwd' must not escape the cache root."""
+    with pytest.raises(CacheError, match="Unsafe path component"):
+        cache.store("french", "ff5", sample_df, version="../../../etc/passwd")
+
+
+def test_store_path_traversal_in_dataset_raises(
+    cache: CacheLayer, sample_df: pd.DataFrame
+) -> None:
+    """dataset='../../evil' must not escape the cache root."""
+    with pytest.raises(CacheError, match="Unsafe path component"):
+        cache.store("french", "../../evil", sample_df, version="v1")
+
+
+# ---------------------------------------------------------------------------
+# Security: query() read-only enforcement
+# ---------------------------------------------------------------------------
+
+
+def test_query_write_statement_raises_cache_error(cache: CacheLayer) -> None:
+    """query() must reject write statements before they reach DuckDB."""
+    with pytest.raises(CacheError, match="read-only SQL"):
+        cache.query("CREATE TABLE evil (x INT)")
+
+
+def test_query_copy_statement_raises_cache_error(cache: CacheLayer) -> None:
+    """COPY ... TO must be blocked by the write-keyword guard."""
+    with pytest.raises(CacheError, match="read-only SQL"):
+        cache.query("COPY snapshots TO '/tmp/exfil.csv'")
