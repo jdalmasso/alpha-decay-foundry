@@ -310,9 +310,7 @@ class CacheLayer:
                 f"Failed to record metadata for {source}/{dataset}@{version}: {exc}"
             ) from exc
 
-        logger.info(
-            "Cached partitioned %s/%s@%s → %s", source, dataset, version, root
-        )
+        logger.info("Cached partitioned %s/%s@%s → %s", source, dataset, version, root)
 
     def load_partitioned(
         self,
@@ -342,9 +340,7 @@ class CacheLayer:
         root_str = self._resolve_path(source, dataset, version)
         root = Path(root_str)
         if not root.is_dir():
-            raise CacheError(
-                f"Partitioned dataset root not found for {source}/{dataset}: {root}"
-            )
+            raise CacheError(f"Partitioned dataset root not found for {source}/{dataset}: {root}")
 
         try:
             # pyarrow has no py.typed marker; ParquetDataset and read_pandas are untyped
@@ -356,9 +352,7 @@ class CacheLayer:
         except CacheError:
             raise
         except Exception as exc:
-            raise CacheError(
-                f"Failed to read partitioned {source}/{dataset}: {exc}"
-            ) from exc
+            raise CacheError(f"Failed to read partitioned {source}/{dataset}: {exc}") from exc
         return df
 
     # ------------------------------------------------------------------

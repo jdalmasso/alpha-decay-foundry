@@ -287,6 +287,4 @@ def test_store_partitioned_path_traversal_raises(
     rng = np.random.default_rng(4)
     df = pd.DataFrame({"year": ["2020"], "value": rng.normal(0, 1, 1)})
     with pytest.raises(CacheError, match="Unsafe path component"):
-        cache.store_partitioned(
-            "../../evil", "chars", df, partition_cols=["year"], version="v1"
-        )
+        cache.store_partitioned("../../evil", "chars", df, partition_cols=["year"], version="v1")
