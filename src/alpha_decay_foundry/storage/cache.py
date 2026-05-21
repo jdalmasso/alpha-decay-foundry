@@ -33,10 +33,17 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_CACHE_DIR = Path.home() / ".alpha_decay_foundry" / "cache"
 
-# DuckDB keywords that can write to disk or mutate schema.  query() rejects
-# any SQL whose first non-whitespace token matches one of these.
-_WRITE_SQL_PATTERN = re.compile(
-    r"^\s*(COPY|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|ATTACH|DETACH)\b",
+# Whitelist of DuckDB statement types that are safe for query().
+# A blacklist approach has known bypass vectors (EXPORT DATABASE, FROM-first
+# table-function syntax, multi-statement injection); a whitelist is strictly
+# stronger.  Only SELECT / WITH (CTEs) / read-only introspection keywords are
+# permitted.  Note: a proper read_only=True DuckDB connection would be ideal,
+# but DuckDB rejects a second connection with a different access mode to the
+# same file while a write connection is open.
+# TODO(v0.1-clarify): revisit when DuckDB adds per-cursor access-mode control.
+# Provisional choice: whitelist regex; alternative: subprocess isolation.
+_READ_SQL_WHITELIST = re.compile(
+    r"^\s*(SELECT|WITH|SHOW|DESCRIBE|EXPLAIN|PRAGMA)\b",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -209,31 +216,47 @@ class CacheLayer:
     def query(self, sql: str) -> pd.DataFrame:
         """Execute a DuckDB SQL query against cached metadata and return results.
 
-        Write statements (``COPY``, ``INSERT``, ``UPDATE``, ``DELETE``,
-        ``CREATE``, ``DROP``, ``ALTER``, ``TRUNCATE``, ``ATTACH``,
-        ``DETACH``) are blocked before reaching DuckDB.  This prevents
-        accidental or injected SQL from mutating the metadata database or
-        writing files to the local filesystem.
+        Only ``SELECT``, ``WITH`` (CTEs), ``SHOW``, ``DESCRIBE``, ``EXPLAIN``,
+        and ``PRAGMA`` statements are accepted.  All other statement types —
+        including ``EXPORT DATABASE``, ``COPY``, ``INSERT``, ``UPDATE``,
+        ``DELETE``, ``CREATE``, ``DROP``, ``ALTER``, ``TRUNCATE``, ``ATTACH``,
+        ``DETACH``, and bare table-function calls (e.g.
+        ``FROM read_parquet(...)`` in DuckDB's FROM-first syntax) — are
+        rejected before reaching DuckDB.
 
-        **Security note**: ``sql`` must never be derived from external
-        sources (config files, CLI flags, downloaded content).  The write
-        guard blocks leading write keywords but is not a substitute for
-        treating externally-derived strings as untrusted input.
+        Multi-statement SQL (two or more statements separated by ``;``) is also
+        rejected to prevent injection of write statements after an otherwise
+        valid read.
+
+        **Security note**: ``sql`` must never be derived from external sources
+        (config files, CLI flags, downloaded content).  The guards here prevent
+        accidental misuse and common injection patterns but are not a full SQL
+        sandbox; callers are responsible for ensuring ``sql`` originates from
+        trusted application code.
 
         Args:
-            sql: DuckDB-dialect SQL statement.  Must be a read-only query
-                (SELECT, SHOW, DESCRIBE, EXPLAIN, or equivalent).
+            sql: DuckDB-dialect SQL statement.  Must be a single read-only
+                query (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN, or PRAGMA).
 
         Returns:
             DataFrame containing all result rows.
 
         Raises:
-            CacheError: If ``sql`` contains a write keyword, or if DuckDB
-                raises an error executing the query.
+            CacheError: If ``sql`` does not start with an allowed keyword, if
+                it contains multiple statements, or if DuckDB raises an error.
         """
-        if _WRITE_SQL_PATTERN.match(sql):
+        # Whitelist guard: only read-only statement types are allowed.
+        if not _READ_SQL_WHITELIST.match(sql):
             raise CacheError(
-                "query() only accepts read-only SQL. Use store() for writes to the cache."
+                "query() only accepts read-only SQL (SELECT, WITH, SHOW, DESCRIBE, "
+                "EXPLAIN, PRAGMA). Use store() for writes to the cache."
+            )
+        # Multi-statement guard: strip a trailing semicolon, then reject any
+        # remaining semicolons.  This blocks injection patterns such as
+        # "SELECT 1; DROP TABLE snapshots".
+        if ";" in sql.rstrip().rstrip(";"):
+            raise CacheError(
+                "query() does not accept multi-statement SQL. Submit one statement at a time."
             )
         try:
             result: pd.DataFrame = self._conn.execute(sql).df()
