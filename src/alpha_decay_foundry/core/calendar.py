@@ -37,9 +37,7 @@ class TradingCalendar(Protocol):
         """
         ...
 
-    def sessions_in_range(
-        self, start: Timestamp, end: Timestamp
-    ) -> pd.DatetimeIndex:
+    def sessions_in_range(self, start: Timestamp, end: Timestamp) -> pd.DatetimeIndex:
         """Return all trading sessions in [start, end], inclusive.
 
         Args:
@@ -108,9 +106,7 @@ class NYSECalendar:
         """
         return bool(self._xcal.is_session(self._to_naive(t)))
 
-    def sessions_in_range(
-        self, start: Timestamp, end: Timestamp
-    ) -> pd.DatetimeIndex:
+    def sessions_in_range(self, start: Timestamp, end: Timestamp) -> pd.DatetimeIndex:
         """Return all NYSE trading sessions in [start, end], inclusive.
 
         Args:

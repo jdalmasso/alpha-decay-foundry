@@ -41,9 +41,9 @@ def test_nyse_calendar_name(cal: NYSECalendar) -> None:
         ("2023-09-04", False),  # Labor Day
         ("2023-12-23", False),  # Saturday
         ("2023-12-24", False),  # Sunday
-        ("2023-12-26", True),   # Tuesday after Christmas
-        ("2023-12-20", True),   # Regular Wednesday
-        ("2024-01-02", True),   # Regular Tuesday
+        ("2023-12-26", True),  # Tuesday after Christmas
+        ("2023-12-20", True),  # Regular Wednesday
+        ("2024-01-02", True),  # Regular Tuesday
     ],
 )
 def test_is_session(cal: NYSECalendar, date_str: str, expected: bool) -> None:

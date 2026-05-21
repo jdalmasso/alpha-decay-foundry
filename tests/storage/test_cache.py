@@ -69,27 +69,19 @@ def test_store_creates_parquet_file(
     assert expected.exists()
 
 
-def test_load_returns_equivalent_dataframe(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_load_returns_equivalent_dataframe(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
     loaded = cache.load("french", "ff5_factors", version="2020-01-01")
-    pd.testing.assert_frame_equal(
-        loaded.reset_index(drop=True), sample_df.reset_index(drop=True)
-    )
+    pd.testing.assert_frame_equal(loaded.reset_index(drop=True), sample_df.reset_index(drop=True))
 
 
-def test_store_default_version_uses_today(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_store_default_version_uses_today(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     today = str(date.today())
     cache.store("french", "ff5_factors", sample_df)
     assert cache.exists("french", "ff5_factors", version=today)
 
 
-def test_load_without_version_returns_latest(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_load_without_version_returns_latest(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
     cache.store("french", "ff5_factors", sample_df, version="2020-06-01")
     loaded = cache.load("french", "ff5_factors")
@@ -103,16 +95,12 @@ def test_store_is_atomic(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     assert tmp_files == []
 
 
-def test_store_overwrites_existing_version(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_store_overwrites_existing_version(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5", sample_df, version="2020-01-01")
     new_df = sample_df * 2
     cache.store("french", "ff5", new_df, version="2020-01-01")
     loaded = cache.load("french", "ff5", version="2020-01-01")
-    pd.testing.assert_frame_equal(
-        loaded.reset_index(drop=True), new_df.reset_index(drop=True)
-    )
+    pd.testing.assert_frame_equal(loaded.reset_index(drop=True), new_df.reset_index(drop=True))
 
 
 def test_load_with_filter_returns_subset(cache: CacheLayer) -> None:
@@ -128,9 +116,7 @@ def test_load_with_filter_returns_subset(cache: CacheLayer) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_exists_true_after_store(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_exists_true_after_store(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
     assert cache.exists("french", "ff5_factors", version="2020-01-01") is True
 
@@ -139,9 +125,7 @@ def test_exists_false_before_store(cache: CacheLayer) -> None:
     assert cache.exists("french", "ff5_factors", version="2020-01-01") is False
 
 
-def test_exists_without_version_true_if_any(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_exists_without_version_true_if_any(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
     assert cache.exists("french", "ff5_factors") is True
 
@@ -170,18 +154,14 @@ def test_load_without_version_raises_on_empty(cache: CacheLayer) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_multiple_versions_coexist(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_multiple_versions_coexist(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("osap", "chars", sample_df, version="2020-01-01")
     cache.store("osap", "chars", sample_df * 2, version="2020-06-01")
     assert cache.exists("osap", "chars", version="2020-01-01")
     assert cache.exists("osap", "chars", version="2020-06-01")
 
 
-def test_different_sources_independent(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_different_sources_independent(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5", sample_df, version="v1")
     assert not cache.exists("osap", "ff5", version="v1")
 
@@ -191,13 +171,9 @@ def test_different_sources_independent(
 # ---------------------------------------------------------------------------
 
 
-def test_query_snapshots_table(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_query_snapshots_table(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
-    result = cache.query(
-        "SELECT source, dataset, version FROM snapshots ORDER BY source"
-    )
+    result = cache.query("SELECT source, dataset, version FROM snapshots ORDER BY source")
     assert len(result) == 1
     assert result["source"].iloc[0] == "french"
     assert result["version"].iloc[0] == "2020-01-01"
@@ -230,17 +206,13 @@ def test_store_path_traversal_in_source_raises(cache: CacheLayer, sample_df: pd.
         cache.store("../../evil", "dataset", sample_df, version="v1")
 
 
-def test_store_path_traversal_in_version_raises(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_store_path_traversal_in_version_raises(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     """version='../../../etc/passwd' must not escape the cache root."""
     with pytest.raises(CacheError, match="Unsafe path component"):
         cache.store("french", "ff5", sample_df, version="../../../etc/passwd")
 
 
-def test_store_path_traversal_in_dataset_raises(
-    cache: CacheLayer, sample_df: pd.DataFrame
-) -> None:
+def test_store_path_traversal_in_dataset_raises(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
     """dataset='../../evil' must not escape the cache root."""
     with pytest.raises(CacheError, match="Unsafe path component"):
         cache.store("french", "../../evil", sample_df, version="v1")

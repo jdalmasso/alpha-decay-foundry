@@ -121,8 +121,7 @@ class OSAPUniverse:
     def __init__(self, name: str, osap_provider: OSAPDataProvider) -> None:
         self.name = name
         raise NotImplementedError(
-            "OSAPUniverse requires OSAPDataProvider (issue #14). "
-            "Use StaticUniverse for unit tests."
+            "OSAPUniverse requires OSAPDataProvider (issue #14). Use StaticUniverse for unit tests."
         )
 
     def members_at(self, t: Timestamp) -> set[AssetId]:  # pragma: no cover

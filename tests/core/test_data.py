@@ -81,9 +81,7 @@ def test_get_panel_universe_none_accepted(
 def test_get_returns_returns_dataframe(mock_data_provider: InMemoryDataProvider) -> None:
     start = pd.Timestamp("2020-01-02", tz="UTC")
     end = pd.Timestamp("2020-01-31", tz="UTC")
-    universe = StaticUniverse(
-        "test", {AssetId("AAPL"), AssetId("MSFT"), AssetId("GOOG")}
-    )
+    universe = StaticUniverse("test", {AssetId("AAPL"), AssetId("MSFT"), AssetId("GOOG")})
     df = mock_data_provider.get_returns(start, end, universe)
     assert isinstance(df, pd.DataFrame)
 
@@ -156,9 +154,7 @@ def test_get_factor_returns_index_utc_aware(
 
 
 @pytest.mark.parametrize("method", ["get_panel", "get_returns", "get_factor_returns"])
-def test_single_day_range(
-    mock_data_provider: InMemoryDataProvider, method: str
-) -> None:
+def test_single_day_range(mock_data_provider: InMemoryDataProvider, method: str) -> None:
     t = pd.Timestamp("2020-06-15", tz="UTC")
     universe = StaticUniverse("test", {AssetId("AAPL")})
     if method == "get_panel":

@@ -124,9 +124,7 @@ class CacheLayer:
         except Exception as exc:
             if tmp_path.exists():
                 tmp_path.unlink()
-            raise CacheError(
-                f"Failed to store {source}/{dataset}@{version}: {exc}"
-            ) from exc
+            raise CacheError(f"Failed to store {source}/{dataset}@{version}: {exc}") from exc
 
         try:
             self._conn.execute(
@@ -171,9 +169,7 @@ class CacheLayer:
         try:
             df: pd.DataFrame = pd.read_parquet(path)
         except Exception as exc:
-            raise CacheError(
-                f"Failed to read cached file for {source}/{dataset}: {exc}"
-            ) from exc
+            raise CacheError(f"Failed to read cached file for {source}/{dataset}: {exc}") from exc
 
         if filters:
             for col, val in filters.items():
@@ -237,8 +233,7 @@ class CacheLayer:
         """
         if _WRITE_SQL_PATTERN.match(sql):
             raise CacheError(
-                "query() only accepts read-only SQL. "
-                "Use store() for writes to the cache."
+                "query() only accepts read-only SQL. Use store() for writes to the cache."
             )
         try:
             result: pd.DataFrame = self._conn.execute(sql).df()
@@ -252,9 +247,7 @@ class CacheLayer:
     # Internals
     # ------------------------------------------------------------------
 
-    def _validate_path_components(
-        self, source: str, dataset: str, version: str
-    ) -> None:
+    def _validate_path_components(self, source: str, dataset: str, version: str) -> None:
         """Raise CacheError if any path component escapes the cache root.
 
         Resolves the joined path and asserts it starts with
@@ -281,9 +274,7 @@ class CacheLayer:
         self._validate_path_components(source, dataset, version)
         return self.cache_dir / source / dataset / f"snapshot_{version}.parquet"
 
-    def _resolve_path(
-        self, source: str, dataset: str, version: str | None
-    ) -> str:
+    def _resolve_path(self, source: str, dataset: str, version: str | None) -> str:
         """Return the filesystem path for a snapshot, or raise CacheError."""
         if version is not None:
             row = self._conn.execute(
