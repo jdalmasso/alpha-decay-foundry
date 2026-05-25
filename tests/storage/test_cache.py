@@ -306,3 +306,20 @@ def test_store_partitioned_path_traversal_raises(
     df = pd.DataFrame({"year": ["2020"], "value": rng.normal(0, 1, 1)})
     with pytest.raises(CacheError, match="Unsafe path component"):
         cache.store_partitioned("../../evil", "chars", df, partition_cols=["year"], version="v1")
+
+
+def test_store_partitioned_version_isolation(cache: CacheLayer) -> None:
+    """Each version must be stored in its own directory tree (CC-1 regression)."""
+    df_v1 = pd.DataFrame({"year": ["2020"], "value": [1.0]})
+    df_v2 = pd.DataFrame({"year": ["2020"], "value": [2.0]})
+    cache.store_partitioned("osap", "chars", df_v1, partition_cols=["year"], version="v1")
+    cache.store_partitioned("osap", "chars", df_v2, partition_cols=["year"], version="v2")
+
+    loaded_v1 = cache.load_partitioned("osap", "chars", version="v1")
+    loaded_v2 = cache.load_partitioned("osap", "chars", version="v2")
+
+    # Each version should have exactly one row with the value that was stored.
+    assert len(loaded_v1) == 1
+    assert len(loaded_v2) == 1
+    assert float(loaded_v1["value"].iloc[0]) == pytest.approx(1.0)
+    assert float(loaded_v2["value"].iloc[0]) == pytest.approx(2.0)
