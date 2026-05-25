@@ -186,6 +186,14 @@ class CacheLayer:
             CacheError: If no matching snapshot is found.
         """
         path = self._resolve_path(source, dataset, version)
+        # Re-validate: a tampered metadata DB could store a path that escapes
+        # cache_dir.  Reject it before opening the file.
+        resolved = Path(path).resolve()
+        if not resolved.is_relative_to(self.cache_dir.resolve()):
+            raise CacheError(
+                f"Resolved path for {source}/{dataset} escapes cache root — "
+                "metadata may be corrupted."
+            )
 
         try:
             df: pd.DataFrame = pd.read_parquet(path)
@@ -379,6 +387,13 @@ class CacheLayer:
         """
         root_str = self._resolve_path(source, dataset, version)
         root = Path(root_str)
+        # Re-validate: a tampered metadata DB could store a path that escapes
+        # cache_dir.  Reject it before opening any files.
+        if not root.resolve().is_relative_to(self.cache_dir.resolve()):
+            raise CacheError(
+                f"Resolved path for {source}/{dataset} escapes cache root — "
+                "metadata may be corrupted."
+            )
         if not root.is_dir():
             raise CacheError(f"Partitioned dataset root not found for {source}/{dataset}: {root}")
 
