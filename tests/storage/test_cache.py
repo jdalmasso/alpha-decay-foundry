@@ -235,6 +235,24 @@ def test_query_copy_statement_raises_cache_error(cache: CacheLayer) -> None:
         cache.query("COPY snapshots TO '/tmp/exfil.csv'")
 
 
+def test_query_export_database_blocked(cache: CacheLayer) -> None:
+    """EXPORT DATABASE must be blocked (was a bypass in the old blacklist guard)."""
+    with pytest.raises(CacheError, match="read-only SQL"):
+        cache.query("EXPORT DATABASE '/tmp/exfil'")
+
+
+def test_query_table_function_blocked(cache: CacheLayer) -> None:
+    """DuckDB FROM-first table-function syntax must be blocked."""
+    with pytest.raises(CacheError, match="read-only SQL"):
+        cache.query("FROM read_parquet('/etc/shadow')")
+
+
+def test_query_multi_statement_blocked(cache: CacheLayer) -> None:
+    """Multi-statement SQL must be rejected to prevent injection after a valid read."""
+    with pytest.raises(CacheError, match="multi-statement"):
+        cache.query("SELECT 1; DROP TABLE snapshots")
+
+
 # ---------------------------------------------------------------------------
 # Hive-style partitioned store / load
 # ---------------------------------------------------------------------------
