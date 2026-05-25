@@ -111,6 +111,14 @@ def test_load_with_filter_returns_subset(cache: CacheLayer) -> None:
     assert len(loaded) == 2
 
 
+def test_load_filter_missing_column_raises_cache_error(cache: CacheLayer) -> None:
+    """load() must raise CacheError (not KeyError) for a missing filter column (CC-4)."""
+    df = pd.DataFrame({"ticker": ["AAPL"], "value": [1.0]})
+    cache.store("test", "prices", df, version="v1")
+    with pytest.raises(CacheError, match="nonexistent"):
+        cache.load("test", "prices", version="v1", filters={"nonexistent": "AAPL"})
+
+
 # ---------------------------------------------------------------------------
 # exists
 # ---------------------------------------------------------------------------

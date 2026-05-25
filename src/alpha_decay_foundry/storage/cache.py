@@ -194,6 +194,11 @@ class CacheLayer:
 
         if filters:
             for col, val in filters.items():
+                if col not in df.columns:
+                    raise CacheError(
+                        f"Filter column {col!r} not found in {source}/{dataset}. "
+                        f"Available columns: {list(df.columns)}"
+                    )
                 df = df.loc[df[col] == val]
 
         return df
