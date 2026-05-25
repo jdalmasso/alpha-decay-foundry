@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from alpha_decay_foundry.core.types import AssetId, DateRange
+from alpha_decay_foundry.core.types import AssetId
 from alpha_decay_foundry.core.universe import StaticUniverse
 from tests.utils.data import InMemoryDataProvider
 
@@ -22,15 +22,6 @@ SAMPLE_END = pd.Timestamp("2020-12-31", tz="UTC")
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def sample_date_range() -> DateRange:
-    """DateRange covering 2020-2023 for integration tests."""
-    return DateRange(
-        start=pd.Timestamp("2020-01-02", tz="UTC"),
-        end=pd.Timestamp("2023-12-29", tz="UTC"),
-    )
 
 
 @pytest.fixture

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import ClassVar
 
 from .exceptions import LifecycleViolationError
 from .types import Timestamp
@@ -75,20 +76,16 @@ class StrategyLifecycle:
         decisions: Ordered log of ``GoLiveDecision`` records.
     """
 
+    # Permitted forward transitions (no skipping phases).  Never mutated, so
+    # declared as a ClassVar rather than a per-instance default_factory field.
+    _TRANSITIONS: ClassVar[dict[Phase, Phase]] = {
+        Phase.IN_SAMPLE: Phase.PAPER,
+        Phase.PAPER: Phase.LIVE,
+    }
+
     current_phase: Phase = field(default=Phase.IN_SAMPLE)
     allow_live: bool = field(default=False)
     decisions: list[GoLiveDecision] = field(default_factory=list)
-
-    # Permitted forward transitions (no skipping phases)
-    _TRANSITIONS: dict[Phase, Phase] = field(
-        default_factory=lambda: {
-            Phase.IN_SAMPLE: Phase.PAPER,
-            Phase.PAPER: Phase.LIVE,
-        },
-        init=False,
-        repr=False,
-        compare=False,
-    )
 
     @classmethod
     def research_only(cls) -> StrategyLifecycle:

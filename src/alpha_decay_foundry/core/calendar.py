@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-import exchange_calendars as xcals  # type: ignore[import-untyped]  # no py.typed marker
+# exchange_calendars has no py.typed marker; suppress import-untyped for the whole module.
+import exchange_calendars as xcals  # type: ignore[import-untyped]
 import pandas as pd
 
 from .types import Timestamp
