@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +75,13 @@ class CacheLayer:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        """Create the snapshots metadata table if it does not exist."""
+        """Create the snapshots metadata table if it does not exist.
+
+        If the table already exists with the legacy ``TIMESTAMP`` (local-time)
+        type for ``stored_at``, it is migrated in-place to ``TIMESTAMPTZ`` so
+        that ordering by ``stored_at`` is correct regardless of the host
+        timezone.
+        """
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS snapshots (
@@ -83,11 +89,19 @@ class CacheLayer:
                 dataset     VARCHAR NOT NULL,
                 version     VARCHAR NOT NULL,
                 path        VARCHAR NOT NULL,
-                stored_at   TIMESTAMP DEFAULT current_timestamp,
+                stored_at   TIMESTAMPTZ NOT NULL,
                 PRIMARY KEY (source, dataset, version)
             )
             """
         )
+        # Migrate databases created before C-3 fix: if the column is still the
+        # legacy TIMESTAMP type, alter it to TIMESTAMPTZ in-place.
+        col_info = self._conn.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_name='snapshots' AND column_name='stored_at'"
+        ).fetchone()
+        if col_info is not None and col_info[0].upper() == "TIMESTAMP":
+            self._conn.execute("ALTER TABLE snapshots ALTER stored_at TYPE TIMESTAMPTZ")
 
     # ------------------------------------------------------------------
     # Public API
@@ -136,10 +150,10 @@ class CacheLayer:
         try:
             self._conn.execute(
                 """
-                INSERT OR REPLACE INTO snapshots (source, dataset, version, path)
-                VALUES (?, ?, ?, ?)
+                INSERT OR REPLACE INTO snapshots (source, dataset, version, path, stored_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                [source, dataset, version, str(target)],
+                [source, dataset, version, str(target), datetime.now(UTC)],
             )
         except Exception as exc:
             raise CacheError(
@@ -323,10 +337,10 @@ class CacheLayer:
         try:
             self._conn.execute(
                 """
-                INSERT OR REPLACE INTO snapshots (source, dataset, version, path)
-                VALUES (?, ?, ?, ?)
+                INSERT OR REPLACE INTO snapshots (source, dataset, version, path, stored_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                [source, dataset, version, str(root)],
+                [source, dataset, version, str(root), datetime.now(UTC)],
             )
         except Exception as exc:
             raise CacheError(
