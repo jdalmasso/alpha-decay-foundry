@@ -281,8 +281,10 @@ class CacheLayer:
         """Write Hive-style partitioned Parquet files for time-series data.
 
         Partitions are written as ``<col>=<value>/data.parquet`` sub-paths
-        under ``cache_dir/<source>/<dataset>/``.  A single metadata row
-        records the partition root (not each individual file).
+        under ``cache_dir/<source>/<dataset>/<version>/``.  Each version gets
+        its own isolated partition tree so that multiple versions of the same
+        dataset can coexist without overwriting each other.  A single metadata
+        row records the versioned partition root (not each individual file).
 
         Args:
             source: Data source name.
@@ -296,17 +298,15 @@ class CacheLayer:
             CacheError: If any path component escapes the cache root, or
                 if the write or metadata update fails.
         """
-        import pyarrow.parquet as _pq
-
         version = version or str(date.today())
         self._validate_path_components(source, dataset, version)
-        root = self.cache_dir / source / dataset
+        root = self.cache_dir / source / dataset / version
         root.mkdir(parents=True, exist_ok=True)
 
         try:
             table = pa.Table.from_pandas(data)
             # pyarrow has no py.typed marker; pq.write_to_dataset is untyped
-            _pq.write_to_dataset(  # type: ignore[no-untyped-call]
+            pq.write_to_dataset(  # type: ignore[no-untyped-call]
                 table,
                 root_path=str(root),
                 partition_cols=partition_cols,
@@ -358,8 +358,6 @@ class CacheLayer:
         Raises:
             CacheError: If no matching snapshot is found or read fails.
         """
-        import pyarrow.parquet as _pq
-
         root_str = self._resolve_path(source, dataset, version)
         root = Path(root_str)
         if not root.is_dir():
@@ -367,7 +365,7 @@ class CacheLayer:
 
         try:
             # pyarrow has no py.typed marker; ParquetDataset and read_pandas are untyped
-            dataset_obj = _pq.ParquetDataset(  # type: ignore[no-untyped-call]
+            dataset_obj = pq.ParquetDataset(  # type: ignore[no-untyped-call]
                 str(root),
                 filters=filters,
             )
