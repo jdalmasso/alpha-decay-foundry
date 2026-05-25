@@ -24,7 +24,7 @@ SAMPLE_END = pd.Timestamp("2020-12-31", tz="UTC")
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_data_provider() -> InMemoryDataProvider:
     """In-memory DataProvider with synthetic daily data for 2020.
 

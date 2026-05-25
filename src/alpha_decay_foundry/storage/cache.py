@@ -102,6 +102,11 @@ class CacheLayer:
         ).fetchone()
         if col_info is not None and col_info[0].upper() == "TIMESTAMP":
             self._conn.execute("ALTER TABLE snapshots ALTER stored_at TYPE TIMESTAMPTZ")
+        # Composite index on (source, dataset) so exists() and _resolve_path()
+        # avoid full table scans when the metadata DB grows large.
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_snapshots_source_dataset ON snapshots (source, dataset)"
+        )
 
     # ------------------------------------------------------------------
     # Public API

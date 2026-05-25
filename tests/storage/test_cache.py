@@ -82,10 +82,13 @@ def test_store_default_version_uses_today(cache: CacheLayer, sample_df: pd.DataF
 
 
 def test_load_without_version_returns_latest(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
-    cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
-    cache.store("french", "ff5_factors", sample_df, version="2020-06-01")
+    """load() with no version must return the most recently *stored* snapshot (T-1)."""
+    older_df = sample_df
+    newer_df = sample_df * 2
+    cache.store("french", "ff5_factors", older_df, version="2020-01-01")
+    cache.store("french", "ff5_factors", newer_df, version="2020-06-01")
     loaded = cache.load("french", "ff5_factors")
-    assert loaded is not None
+    pd.testing.assert_frame_equal(loaded.reset_index(drop=True), newer_df.reset_index(drop=True))
 
 
 def test_store_is_atomic(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
