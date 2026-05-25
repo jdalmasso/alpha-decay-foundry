@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -177,6 +177,27 @@ def test_query_snapshots_table(cache: CacheLayer, sample_df: pd.DataFrame) -> No
     assert len(result) == 1
     assert result["source"].iloc[0] == "french"
     assert result["version"].iloc[0] == "2020-01-01"
+
+
+def test_stored_at_is_utc(cache: CacheLayer, sample_df: pd.DataFrame) -> None:
+    """stored_at must be a timezone-aware timestamp stored as UTC (C-3).
+
+    DuckDB returns TIMESTAMPTZ values localized to the session timezone, so
+    tzinfo will not always be UTC on the wire.  What matters is that the value
+    is timezone-aware (not naive) and converts to UTC correctly.
+    """
+    before = datetime.now(UTC)
+    cache.store("french", "ff5_factors", sample_df, version="2020-01-01")
+    after = datetime.now(UTC)
+
+    result = cache.query("SELECT stored_at FROM snapshots")
+    stored_at = result["stored_at"].iloc[0]
+
+    # Must be timezone-aware
+    assert stored_at.tzinfo is not None, "stored_at should be timezone-aware"
+    # Normalise to UTC and verify the wall-clock value is within the store window
+    stored_utc = stored_at.tz_convert("UTC").to_pydatetime()
+    assert before - timedelta(seconds=1) <= stored_utc <= after + timedelta(seconds=1)
 
 
 def test_query_invalid_sql_raises_cache_error(cache: CacheLayer) -> None:
