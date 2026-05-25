@@ -247,6 +247,26 @@ def test_store_path_traversal_in_dataset_raises(cache: CacheLayer, sample_df: pd
         cache.store("french", "../../evil", sample_df, version="v1")
 
 
+def test_load_tampered_path_raises(cache: CacheLayer) -> None:
+    """load() must reject a path injected into metadata that escapes cache_dir (S-2)."""
+    cache._conn.execute(
+        "INSERT INTO snapshots (source, dataset, version, path, stored_at) VALUES (?, ?, ?, ?, ?)",
+        ["src", "ds", "v1", "/etc/passwd", datetime.now(UTC)],
+    )
+    with pytest.raises(CacheError, match="escapes cache root"):
+        cache.load("src", "ds", version="v1")
+
+
+def test_load_partitioned_tampered_path_raises(cache: CacheLayer) -> None:
+    """load_partitioned() must reject a path injected into metadata that escapes cache_dir (S-2)."""
+    cache._conn.execute(
+        "INSERT INTO snapshots (source, dataset, version, path, stored_at) VALUES (?, ?, ?, ?, ?)",
+        ["src", "ds", "v1", "/etc/passwd", datetime.now(UTC)],
+    )
+    with pytest.raises(CacheError, match="escapes cache root"):
+        cache.load_partitioned("src", "ds", version="v1")
+
+
 # ---------------------------------------------------------------------------
 # Security: query() read-only enforcement
 # ---------------------------------------------------------------------------
